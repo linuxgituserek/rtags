@@ -148,7 +148,7 @@ Each element of the alist is a cons-cell of the form (DESCRIPTION . FUNCTION)."
                 (helm-rtags-string-trim-right content-suffix))))))
 
 (defvar helm-rtags-source nil)
-(setq helm-rtags-source '((name . "RTags Helm")
+(setq helm-rtags-source '((name . "tt Helm")
                           (candidates . helm-rtags-candidates)
                           (real-to-display . helm-rtags-transform)
                           (action . helm-rtags-actions)

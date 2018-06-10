@@ -109,7 +109,7 @@ CALLBACK is the callback function to call."
   "Verify the Flycheck RTags syntax CHECKER."
   (list
    (flycheck-verification-result-new
-    :label "RTags enabled"
+    :label "tt enabled"
     :message (if rtags-enabled "enabled" "disabled")
     :face (if rtags-enabled 'success '(bold warning)))))
 
