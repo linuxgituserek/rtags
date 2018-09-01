@@ -13,44 +13,31 @@
    You should have received a copy of the GNU General Public License
    along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
 
-#ifndef ProcThread_h
-#define ProcThread_h
+#ifndef RPTHREAD_H
+#define RPTHREAD_H
 
-#include <rct/Hash.h>
-#include <rct/Path.h>
 #include <rct/Thread.h>
-#include <rct/SignalSlot.h>
 #include <rct/String.h>
-#include <mutex>
-#include <condition_variable>
-#include <time.h>
-#include "Source.h"
+#include <rct/SignalSlot.h>
+#include <rct/Path.h>
 
-#if defined(OS_Linux) || defined(OS_FreeBSD) || 1
-#define RTAGS_HAS_PROC
-#endif
-
-class ProcThread : public Thread
+class RPThread : public Thread
 {
 public:
-    ProcThread(int interval);
-    ~ProcThread();
-
-    void stop();
-    virtual void run();
-    Signal<std::function<void(SourceList)> > &command() { return mCommand; }
+    RPThread();
+    void kill();
+    virtual void run() override;
+    Signal<std::function<void(RPThread*)> > &readyReadStdOut() { return mReadyReadStdOut; }
+    Signal<std::function<void(RPThread*)> > &finished() { return mFinished; }
+    String readAllStdOut();
+    String readAllStdErr();
+    bool start(const Path &, const List<String> &args);
+    String errorString() const;
+    pid_t pid() const;
+    int returnCode() const;
+    void write(const String &string);
 private:
-    void readProc();
-
-    Signal<std::function<void(SourceList)> > mCommand;
-    std::mutex mMutex;
-    std::condition_variable mCond;
-    int mInterval;
-
-#ifdef RTAGS_HAS_PROC
-    Path mPath;
-#endif
-    Hash<int, bool> mNodes;
+    Signal<std::function<void(RPThread*)> > mReadyReadStdOut, mFinished;
 };
 
 #endif

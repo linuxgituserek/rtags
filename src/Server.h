@@ -36,7 +36,6 @@
 class Match;
 class CompletionThread;
 class Connection;
-class ErrorMessage;
 class IndexDataMessage;
 class QueryJob;
 class LogOutputMessage;
@@ -88,11 +87,12 @@ public:
         Separate32BitAnd64Bit = (1ull << 31),
         SourceIgnoreIncludePathDifferencesInUsr = (1ull << 32),
         NoLibClangIncludePath = (1ull << 33),
-        TranslationUnitCache = (1ull << 34)
+        TranslationUnitCache = (1ull << 34),
+        CompletionDiagnostics = (1ull << 35)
     };
     struct Options {
         Options()
-            : jobCount(0), headerErrorJobCount(0), maxIncludeCompletionDepth(0),
+            : jobCount(0), maxIncludeCompletionDepth(0),
               rpVisitFileTimeout(0), rpIndexDataMessageTimeout(0), rpConnectTimeout(0),
               rpConnectAttempts(0), rpNiceValue(0), maxCrashCount(0),
               completionCacheSize(0), testTimeout(60 * 1000 * 5),
@@ -101,9 +101,9 @@ public:
         {
         }
 
-        Path socketFile, dataDir, argTransform, rp, sandboxRoot;
+        Path socketFile, dataDir, argTransform, rp, sandboxRoot, tempDir;
         Flags<Option> options;
-        size_t jobCount, headerErrorJobCount, maxIncludeCompletionDepth;
+        size_t jobCount, maxIncludeCompletionDepth;
         int rpVisitFileTimeout, rpIndexDataMessageTimeout,
             rpConnectTimeout, rpConnectAttempts, rpNiceValue, maxCrashCount,
             completionCacheSize, testTimeout, maxFileMapScopeCacheSize, errorLimit,
@@ -112,7 +112,7 @@ public:
         List<String> defaultArguments, excludeFilters;
         Set<String> blockedArguments;
         List<Source::Include> includePaths;
-        List<Source::Define> defines;
+        Set<Source::Define> defines;
         List<Path> tests;
         Set<Path> ignoredCompilers;
         Set<String> compilerWrappers;
@@ -142,10 +142,13 @@ public:
                SourceCache *cache = 0) const;
     enum FileIdsFileFlag {
         None = 0x0,
-        HasSandboxRoot = 0x1
+        HasSandboxRoot = 0x1,
+        HasNoRealPath = 0x2,
+        HasRealPath = 0x4
     };
 
     void filterBlockedArguments(Source &source);
+    void sourceFileModified(const std::shared_ptr<Project> &project, uint32_t fileId);
 private:
     String guessArguments(const String &args, const Path &pwd, const Path &projectRootOverride) const;
     bool load();
@@ -159,13 +162,13 @@ private:
     void handleIndexMessage(const std::shared_ptr<IndexMessage> &message, const std::shared_ptr<Connection> &conn);
     void handleIndexDataMessage(const std::shared_ptr<IndexDataMessage> &message, const std::shared_ptr<Connection> &conn);
     void handleQueryMessage(const std::shared_ptr<QueryMessage> &message, const std::shared_ptr<Connection> &conn);
-    void handleErrorMessage(const std::shared_ptr<ErrorMessage> &message, const std::shared_ptr<Connection> &conn);
     void handleLogOutputMessage(const std::shared_ptr<LogOutputMessage> &message, const std::shared_ptr<Connection> &conn);
     void handleVisitFileMessage(const std::shared_ptr<VisitFileMessage> &message, const std::shared_ptr<Connection> &conn);
 
     // Queries
     void sendDiagnostics(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Connection> &conn);
     void clearProjects(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Connection> &conn);
+    void deadFunctions(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Connection> &conn);
     void codeCompleteAt(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Connection> &conn);
     void symbolInfo(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Connection> &conn);
     void dependencies(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Connection> &conn);
@@ -230,7 +233,6 @@ private:
     Set<std::shared_ptr<Connection> > mConnections;
 
     Signal<std::function<void()> > mIndexDataMessageReceived;
-    friend void saveFileIds();
 };
 RCT_FLAGS(Server::Option);
 RCT_FLAGS(Server::FileIdsFileFlag);

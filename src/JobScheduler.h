@@ -27,6 +27,12 @@ class Connection;
 class IndexDataMessage;
 class IndexerJob;
 class Process;
+class RPThread;
+#ifdef RP_USE_THREAD
+typedef RPThread Vehicle;
+#else
+typedef Process Vehicle;
+#endif
 class Project;
 struct DependencyNode;
 class JobScheduler : public std::enable_shared_from_this<JobScheduler>
@@ -57,9 +63,6 @@ public:
     void handleIndexDataMessage(const std::shared_ptr<IndexDataMessage> &message);
     void dump(const std::shared_ptr<Connection> &conn);
     void abort(const std::shared_ptr<IndexerJob> &job);
-    void clearHeaderError(uint32_t file);
-    bool hasHeaderError(uint32_t fileId) const { return mHeaderErrors.contains(fileId); }
-    Set<uint32_t> headerErrors() const { return mHeaderErrors; }
     void startJobs();
     size_t pendingJobCount() const { return mPendingJobs.size(); }
     size_t activeJobCount() const { return mActiveById.size(); }
@@ -69,17 +72,14 @@ private:
     struct Node {
         unsigned long long started;
         std::shared_ptr<IndexerJob> job;
-        Process *process;
+        Vehicle *vehicle;
         std::shared_ptr<Node> next, prev;
         String stdOut;
     };
-    uint32_t hasHeaderError(DependencyNode *node, Set<uint32_t> &seen) const;
-    uint32_t hasHeaderError(uint32_t file, const std::shared_ptr<Project> &project) const;
 
     int mProcrastination;
-    Set<uint32_t> mHeaderErrors;
     EmbeddedLinkedList<std::shared_ptr<Node> > mPendingJobs;
-    Hash<Process *, std::shared_ptr<Node> > mActiveByProcess;
+    Hash<Vehicle *, std::shared_ptr<Node> > mActiveByVehicle;
     Hash<uint64_t, std::shared_ptr<Node> > mActiveById, mInactiveById;
 };
 

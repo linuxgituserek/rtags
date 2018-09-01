@@ -134,7 +134,7 @@ bool Server::init(const Options &options)
     if (!(options.options & NoNoUnknownWarningsOption))
         mOptions.defaultArguments.append("-Wno-unknown-warning-option");
 
-    mOptions.defines << Source::Define("RTAGS");
+    mOptions.defines << Source::Define("RTAGS", String(), Source::Define::NoValue);
 
     if (mOptions.options & EnableCompilerManager) {
 #ifndef OS_Darwin   // this causes problems on MacOS+clang
@@ -695,6 +695,9 @@ void Server::handleQueryMessage(const std::shared_ptr<QueryMessage> &message, co
         break;
     case QueryMessage::SendDiagnostics:
         sendDiagnostics(message, conn);
+        break;
+    case QueryMessage::DeadFunctions:
+        deadFunctions(message, conn);
         break;
     case QueryMessage::CodeCompleteAt:
         codeCompleteAt(message, conn);
@@ -1622,31 +1625,83 @@ void Server::jobCount(const std::shared_ptr<QueryMessage> &query, const std::sha
 {
     String q = query->query();
     if (q.isEmpty()) {
-        conn->write<128>("Running with %zu/%zu jobs", mOptions.jobCount, mOptions.headerErrorJobCount);
+        conn->write<128>("Running with %zu jobs", mOptions.jobCount);
     } else {
-        const bool header = q.startsWith('h');
-        if (header)
-            q.remove(0, 1);
-        size_t &jobs = header ? mOptions.headerErrorJobCount : mOptions.jobCount;
         int jobCount;
         bool ok;
         if (q == "default") {
             ok = true;
-            jobCount = header ? mOptions.jobCount : std::max(2, ThreadPool::idealThreadCount());
+            jobCount = std::max(2, ThreadPool::idealThreadCount());
         } else {
             jobCount = q.toLongLong(&ok);
         }
         if (!ok || jobCount < 0 || jobCount > 100) {
             conn->write<128>("Invalid job count %s (%d)", query->query().constData(), jobCount);
         } else {
-            if (mOptions.headerErrorJobCount == mOptions.jobCount) {
-                mOptions.headerErrorJobCount = mOptions.jobCount = jobCount;
-            } else {
-                jobs = jobCount;
-                mOptions.headerErrorJobCount = std::min(mOptions.headerErrorJobCount, mOptions.jobCount);
-            }
-            conn->write<128>("Changed jobs to %zu/%zu", mOptions.jobCount, mOptions.headerErrorJobCount);
+            mOptions.jobCount = jobCount;
+            conn->write<128>("Changed jobs to %zu", mOptions.jobCount);
         }
+    }
+    conn->finish();
+}
+
+void Server::deadFunctions(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Connection> &conn)
+{
+    std::shared_ptr<Project> project = projectForQuery(query);
+    if (!project)
+        project = currentProject();
+    if (project) {
+        class DeadFunctionsJob : public QueryJob
+        {
+        public:
+            DeadFunctionsJob(const std::shared_ptr<QueryMessage> &msg, const std::shared_ptr<Project> &project)
+                : QueryJob(msg, project)
+            {}
+            virtual int execute() override
+            {
+                const uint32_t fileId = Location::fileId(queryMessage()->query());
+                if (fileId)
+                    Server::instance()->prepareCompletion(queryMessage(), fileId, project());
+                bool raw = false;
+                if (!(queryFlags() & (QueryMessage::JSON|QueryMessage::Elisp))) {
+                    raw = true;
+                    setPieceFilters(std::move(Set<String>() << "location"));
+                }
+                bool failed = false;
+                const std::shared_ptr<Project> proj = project();
+                auto process = [this, proj, &failed](uint32_t file) {
+                    for (const Symbol &symbol : proj->findDeadFunctions(file)) {
+                        if (!failed && !write(symbol))
+                            failed = true;
+                    }
+                };
+                if (!fileId) {
+                    Set<uint32_t> all = proj->dependencies(0, Project::All);
+                    all.remove([](uint32_t file) { return Location::path(file).isSystem(); });
+                    size_t idx = 0;
+                    const Path projectPath = proj->path();
+                    for (uint32_t file : proj->dependencies(0, Project::All)) {
+                        if (raw) {
+                            Path p = Location::path(file);
+                            const char *ch = p.constData();
+                            if (!(queryFlags() & QueryMessage::AbsolutePath) && p.startsWith(projectPath))
+                                ch += projectPath.size();
+                            if (!write(String::format<256>("%zu/%zu %s", ++idx, all.size(), ch))) {
+                                failed = true;
+                                break;
+                            }
+                        }
+                        process(file);
+                        if (failed)
+                            break;
+                    }
+                } else {
+                    process(fileId);
+                }
+                return 0;
+            }
+        } job(query, project);
+        job.run(conn);
     }
     conn->finish();
 }
@@ -1680,6 +1735,7 @@ void Server::sources(const std::shared_ptr<QueryMessage> &query, const std::shar
                                                           |Source::ExcludeDefaultArguments
                                                           |Source::IncludeCompiler
                                                           |Source::IncludeSourceFile
+                                                          |Source::ExcludeDefaultDefines
                                                           |Source::ExcludeDefaultIncludePaths);
             ret += String::join(source.toCommandLine(flags), splitLine ? '\n' : ' ');
         } else if (splitLine) {
@@ -2058,6 +2114,17 @@ bool Server::load()
             return false;
         }
 
+        if (flags & HasNoRealPath && !(mOptions.options & NoRealPath)) {
+            error() << ("This database was produced with --no-realpath and you're running rdm without --no-realpath. "
+                        "You must specify --no-realpath argument to use this db or start over by passing -C");
+            return false;
+
+        } else if (flags & HasRealPath && mOptions.options & NoRealPath) {
+            error() << ("This database was produced without --no-realpath and you're running rdm with --no-realpath. "
+                        "You must not specify --no-realpath argument to use this db or start over by passing -C");
+            return false;
+        }
+
         // SBROOT
         Hash<Path, uint32_t> pathsToIds;
         fileIdsFile >> pathsToIds;
@@ -2162,6 +2229,11 @@ bool Server::saveFileIds()
     Flags<FileIdsFileFlag> flags;
     if (Sandbox::hasRoot())
         flags |= HasSandboxRoot;
+    if (mOptions.options & NoRealPath) {
+        flags |= HasNoRealPath;
+    } else {
+        flags |= HasRealPath;
+    }
 
     fileIdsFile << flags << Sandbox::encoded(Location::pathsToIds());
 
@@ -2209,8 +2281,9 @@ void Server::codeCompleteAt(const std::shared_ptr<QueryMessage> &query, const st
     Source source = project->source(fileId, query->buildIndex());
     if (source.isNull()) {
         const Set<uint32_t> deps = project->dependencies(fileId, Project::DependsOnArg);
-        if (mCompletionThread)
+        if (mCompletionThread) {
             source = mCompletionThread->findSource(deps);
+        }
 
         if (source.isNull()) {
             for (uint32_t dep : deps) {
@@ -2470,6 +2543,15 @@ bool Server::runTests()
     return ret;
 }
 
+void Server::sourceFileModified(const std::shared_ptr<Project> &project, uint32_t fileId)
+{
+    // error() << Location::path(fileId) << "modified" << (mCompletionThread ? (mCompletionThread->isCached(project, fileId) ? 1 : 0) : -1);
+    if (mCompletionThread && mCompletionThread->isCached(project, fileId)) {
+        mCompletionThread->reparse(project, fileId);
+
+    }
+}
+
 void Server::prepareCompletion(const std::shared_ptr<QueryMessage> &query, uint32_t fileId, const std::shared_ptr<Project> &project)
 {
     if (query->flags() & QueryMessage::CodeCompletionEnabled && !mCompletionThread) {
@@ -2478,7 +2560,7 @@ void Server::prepareCompletion(const std::shared_ptr<QueryMessage> &query, uint3
     }
 
     if (mCompletionThread && fileId) {
-        if (!mCompletionThread->isCached(fileId, project)) {
+        if (!mCompletionThread->isCached(project, fileId)) {
             Source source = project->source(fileId, query->buildIndex());
             if (source.isNull()) {
                 for (const uint32_t dep : project->dependencies(fileId, Project::DependsOnArg)) {

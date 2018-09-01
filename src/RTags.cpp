@@ -105,7 +105,7 @@ void encodePath(Path &path)
 {
     if (Sandbox::encode(path))
         return;
-    
+
     path = encodeUrlComponent(path);
 }
 
@@ -692,22 +692,6 @@ static inline Diagnostic::Flag convertDiagnosticType(CXDiagnosticSeverity sev)
     return type;
 }
 
-static inline bool compareFile(CXFile l, CXFile r)
-{
-    CXString fnl = clang_getFileName(l);
-    CXString fnr = clang_getFileName(r);
-    const char *cstrl = clang_getCString(fnl);
-    const char *cstrr = clang_getCString(fnr);
-    bool ret = false;
-    if (cstrl && cstrr && !strcmp(cstrl, cstrr)) {
-        ret = true;
-    }
-
-    clang_disposeString(fnl);
-    clang_disposeString(fnr);
-    return ret;
-}
-
 void DiagnosticsProvider::diagnose()
 {
     const uint32_t sourceFile = sourceFileId();
@@ -799,7 +783,6 @@ void DiagnosticsProvider::diagnose()
                 //         << clang_getDiagnosticSeverity(diagnostic);
                 continue;
             }
-            const CXDiagnosticSeverity sev = clang_getDiagnosticSeverity(diag);
             // error() << "Got a dude" << clang_getCursor(tu, diagLoc) << fileId << mSource.fileId
             //         << sev << CXDiagnostic_Error;
             const CXCursor cursor = cursorAt(u, diagLoc);
@@ -809,16 +792,6 @@ void DiagnosticsProvider::diagnose()
                 indexData.setFlag(IndexDataMessage::InclusionError);
             assert(fileId);
             Flags<IndexDataMessage::FileFlag> &fileFlags = indexData.files()[fileId];
-            if (fileId != sourceFile && !inclusionError && sev >= CXDiagnostic_Error && !(fileFlags & IndexDataMessage::HeaderError)) {
-                // We don't treat inclusions or code inside a macro expansion as a
-                // header error
-                CXFile expFile, spellingFile;
-                unsigned expLine, expColumn, spellingLine, spellingColumn;
-                clang_getExpansionLocation(diagLoc, &expFile, &expLine, &expColumn, 0);
-                clang_getSpellingLocation(diagLoc, &spellingFile, &spellingLine, &spellingColumn, 0);
-                if (expLine == spellingLine && expColumn == spellingColumn && compareFile(expFile, spellingFile))
-                    fileFlags |= IndexDataMessage::HeaderError;
-            }
             bool templateOnly = false;
             {
                 Flags<Diagnostic::Flag> f = Diagnostic::DisplayCategory;

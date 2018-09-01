@@ -1691,13 +1691,14 @@ CXChildVisitResult ClangIndexer::handleCursor(const CXCursor &cursor, CXCursorKi
 #if CINDEX_VERSION >= CINDEX_VERSION_ENCODE(0, 30)
         c.fieldOffset = std::max<int16_t>(-1, clang_Cursor_getOffsetOfField(cursor));
 #endif
-        // fall through
+        break;
     default:
         break;
     }
 
 #if CINDEX_VERSION >= CINDEX_VERSION_ENCODE(0, 35)
     if (!(c.flags & Symbol::Auto)
+        && kind != CXCursor_LambdaExpr
         && c.type != CXType_LValueReference
         && c.type != CXType_RValueReference
         && c.type != CXType_Auto
@@ -1773,8 +1774,7 @@ CXChildVisitResult ClangIndexer::handleCursor(const CXCursor &cursor, CXCursorKi
         default:
             break;
         }
-
-        // fall through
+        RCT_FALL_THROUGH;
     case CXCursor_FunctionDecl:
     case CXCursor_FunctionTemplate:
         if (c.kind == CXCursor_FunctionTemplate)
@@ -1795,7 +1795,7 @@ CXChildVisitResult ClangIndexer::handleCursor(const CXCursor &cursor, CXCursorKi
         break;
     case CXCursor_Constructor:
         extractArguments(&c.arguments, cursor);
-        // fall through
+        RCT_FALL_THROUGH;
     case CXCursor_Destructor: {
         CXCursor parent = clang_getCursorSemanticParent(cursor);
 

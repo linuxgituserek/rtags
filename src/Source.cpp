@@ -452,10 +452,13 @@ SourceList Source::parse(const String &cmdLine,
         return SourceList();
 
     debug() << "Source::parse (" << cmdLine << ") => " << split << cwd;
-    if (split.at(0).endsWith("/fiskc") || split.at(0) == "fiskc") {
+    size_t idx = 0;
+    if (split.size() > 1 && (split.at(0).endsWith("/ccache") || split.at(0) == "ccache"))
+        ++idx;
+    if (split.at(idx).endsWith("/fiskc") || split.at(idx) == "fiskc") {
         String compiler;
         split.removeAt(0);
-        size_t i=0;
+        size_t i=idx;
         while (i < split.size()) {
             String &str = split[i];
             if (str.startsWith("--fisk-compiler")) {
@@ -477,7 +480,7 @@ SourceList Source::parse(const String &cmdLine,
             }
         }
         if (!compiler.isEmpty())
-            split.insert(0, compiler);
+            split.insert(idx, compiler);
         debug() << "Postfisk Source::parse (" << split;
     }
 
@@ -544,8 +547,11 @@ SourceList Source::parse(const String &cmdLine,
     const int s = split.size();
     String arg;
     Path extraCompiler;
+    bool verbose = testLog(LogLevel::Debug);
     for (int i=0; i<s; ++i) {
         arg = split.at(i);
+        if (verbose)
+            debug() << "parsing argument" << i << arg;
         if (arg.isEmpty())
             continue;
         if ((arg.startsWith('\'') && arg.endsWith('\'')) ||
@@ -682,6 +688,9 @@ SourceList Source::parse(const String &cmdLine,
                 } else {                                                \
                     p = Path::resolved(arg.mid(argLen), Path::MakeAbsolute, cwd); \
                 }                                                       \
+                if (testLog(LogLevel::Warning))                         \
+                    warning() << "Added include path" << p <<           \
+                    "type:" << #type << "for argument" << arg;          \
                 includePaths.append(Source::Include(Source::Include::type, p)); \
             }
 #include "IncludeTypesInternal.h"
@@ -931,10 +940,11 @@ List<String> Source::toCommandLine(Flags<CommandLineFlag> f, bool *usedPch) cons
     if (f & IncludeDefines) {
         for (const auto &def : defines)
             ret += def.toString(f);
-        if (!(f & ExcludeDefaultIncludePaths)) {
+        if (!(f & ExcludeDefaultDefines)) {
             assert(server);
             for (const auto &def : server->options().defines)
-                ret += def.toString(f);
+                if (!defines.contains(def))
+                    ret += def.toString(f);
         }
     }
     if (f & IncludeIncludePaths) {

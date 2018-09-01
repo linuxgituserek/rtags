@@ -21,6 +21,9 @@
 #include "rct/Connection.h"
 #include "rct/Process.h"
 #include "Server.h"
+#ifdef RP_USE_THREAD
+#include "RPThread.h"
+#endif
 
 enum { MaxPriority = 10 };
 // we set the priority to be this when a job has been requested and we couldn't load it
@@ -31,8 +34,8 @@ JobScheduler::JobScheduler()
 JobScheduler::~JobScheduler()
 {
     mPendingJobs.deleteAll();
-    if (!mActiveByProcess.isEmpty()) {
-        for (const auto &job : mActiveByProcess) {
+    if (!mActiveByVehicle.isEmpty()) {
+        for (const auto &job : mActiveByVehicle) {
             job.first->kill();
             delete job.first;
         }
@@ -62,32 +65,6 @@ void JobScheduler::add(const std::shared_ptr<IndexerJob> &job)
         startJobs();
 }
 
-uint32_t JobScheduler::hasHeaderError(DependencyNode *node, Set<uint32_t> &seen) const
-{
-    assert(node);
-    for (auto dep : node->includes) {
-        if (!seen.insert(dep.first))
-            continue;
-
-        if (mHeaderErrors.contains(dep.first)) {
-            return dep.first;
-        }
-        if (uint32_t fileId = hasHeaderError(dep.second, seen)) {
-            return fileId;
-        }
-    }
-    return 0;
-}
-
-uint32_t JobScheduler::hasHeaderError(uint32_t file, const std::shared_ptr<Project> &project) const
-{
-    DependencyNode *node = project->dependencies().value(file);
-    if (!node)
-        return false;
-    Set<uint32_t> seen;
-    return hasHeaderError(node, seen);
-}
-
 void JobScheduler::startJobs()
 {
     Server *server = Server::instance();
@@ -104,7 +81,7 @@ void JobScheduler::startJobs()
         jobNode = tmp;
     };
 
-    while (mActiveByProcess.size() < options.jobCount && jobNode) {
+    while (mActiveByVehicle.size() < options.jobCount && jobNode) {
         assert(jobNode);
         assert(jobNode->job);
         assert(!(jobNode->job->flags & (IndexerJob::Running|IndexerJob::Complete|IndexerJob::Crashed|IndexerJob::Aborted)));
@@ -116,16 +93,16 @@ void JobScheduler::startJobs()
         }
 
         const uint64_t jobId = jobNode->job->id;
-        Process *process = new Process;
-        debug() << "Starting process for" << jobId << jobNode->job->fileId() << jobNode->job.get();
+        Vehicle *vehicle = new Vehicle;
+        debug() << "Starting vehicle for" << jobId << jobNode->job->fileId() << jobNode->job.get();
         List<String> arguments;
         arguments << "--priority" << String::number(jobNode->job->priority());
 
         for (int i=logLevel().toInt(); i>0; --i)
             arguments << "-v";
 
-        process->readyReadStdOut().connect([this](Process *proc) {
-                std::shared_ptr<Node> n = mActiveByProcess[proc];
+        vehicle->readyReadStdOut().connect([this](Vehicle *proc) {
+                std::shared_ptr<Node> n = mActiveByVehicle[proc];
                 assert(n);
                 n->stdOut.append(proc->readAllStdOut());
 
@@ -137,9 +114,9 @@ void JobScheduler::startJobs()
                 }
             });
 
-        if (!process->start(options.rp, arguments)) {
-            error() << "Couldn't start rp" << options.rp << process->errorString();
-            delete process;
+        if (!vehicle->start(options.rp, arguments)) {
+            error() << "Couldn't start rp" << options.rp << vehicle->errorString();
+            delete vehicle;
             jobNode->job->flags |= IndexerJob::Crashed;
             debug() << "job crashed (didn't start)" << jobId << jobNode->job->fileId() << jobNode->job.get();
             auto msg = std::make_shared<IndexDataMessage>(jobNode->job);
@@ -148,19 +125,21 @@ void JobScheduler::startJobs()
             cont();
             continue;
         }
-        process->finished().connect([this, jobId](Process *proc) {
+        const int pid = vehicle->pid();
+        vehicle->finished().connect([this, jobId, options, pid](Vehicle *proc) {
                 EventLoop::deleteLater(proc);
-                auto n = mActiveByProcess.take(proc);
-                assert(!n || n->process == proc);
+                auto n = mActiveByVehicle.take(proc);
+                assert(!n || n->vehicle == proc);
                 const String stdErr = proc->readAllStdErr();
                 if ((n && !n->stdOut.isEmpty()) || !stdErr.isEmpty()) {
-                    error() << (n ? ("Output from " + n->job->sourceFile + ":") : String("Orphaned process:"))
+                    error() << (n ? ("Output from " + n->job->sourceFile + ":") : String("Orphaned vehicle:"))
                             << '\n' << stdErr << (n ? n->stdOut : String());
                 }
+                Path::rmdir(options.tempDir + String::number(pid));
 
                 if (n) {
-                    assert(n->process == proc);
-                    n->process = 0;
+                    assert(n->vehicle == proc);
+                    n->vehicle = 0;
                     assert(!(n->job->flags & IndexerJob::Aborted));
                     if (!(n->job->flags & IndexerJob::Complete) && proc->returnCode() != 0) {
                         auto nodeById = mActiveById.take(jobId);
@@ -178,12 +157,12 @@ void JobScheduler::startJobs()
             });
 
 
-        jobNode->process = process;
+        jobNode->vehicle = vehicle;
         assert(!(jobNode->job->flags & ~IndexerJob::Type_Mask));
         jobNode->job->flags |= IndexerJob::Running;
-        process->write(jobNode->job->encode());
+        vehicle->write(jobNode->job->encode());
         jobNode->started = Rct::monoMs();
-        mActiveByProcess[process] = jobNode;
+        mActiveByVehicle[vehicle] = jobNode;
         // error() << "STARTING JOB" << node->job->sourceFile;
         mInactiveById.remove(jobId);
         mActiveById[jobId] = jobNode;
@@ -204,16 +183,6 @@ void JobScheduler::handleIndexDataMessage(const std::shared_ptr<IndexDataMessage
 
 void JobScheduler::jobFinished(const std::shared_ptr<IndexerJob> &job, const std::shared_ptr<IndexDataMessage> &message)
 {
-    bool headerErrorChanged = false;
-    for (const auto &it : message->files()) {
-        if (it.second & IndexDataMessage::HeaderError) {
-            if (mHeaderErrors.insert(it.first))
-                headerErrorChanged = true;
-        } else if (mHeaderErrors.remove(it.first)) {
-            headerErrorChanged = true;
-        }
-    }
-    // mHeaderErrors.unite(message->headerErrors());
     assert(!(job->flags & IndexerJob::Aborted));
     assert(job);
     assert(message);
@@ -242,8 +211,6 @@ void JobScheduler::jobFinished(const std::shared_ptr<IndexerJob> &job, const std
         debug() << "job crashed too many times" << job->id << job->fileId() << job.get();
     }
     project->onJobFinished(job, message);
-    if (headerErrorChanged)
-        sort();
 }
 
 void JobScheduler::dump(const std::shared_ptr<Connection> &conn)
@@ -290,17 +257,11 @@ void JobScheduler::abort(const std::shared_ptr<IndexerJob> &job)
     } else {
         debug() << "Aborting active job" << job->sourceFile << job->fileId() << job->id << job.get();
     }
-    if (node->process) {
-        debug() << "Killing process" << node->process;
-        node->process->kill();
-        mActiveByProcess.remove(node->process);
+    if (node->vehicle) {
+        debug() << "Killing vehicle" << node->vehicle;
+        node->vehicle->kill();
+        mActiveByVehicle.remove(node->vehicle);
     }
-}
-
-void JobScheduler::clearHeaderError(uint32_t file)
-{
-    if (mHeaderErrors.remove(file))
-        warning() << Location::path(file) << "was touched, starting jobs";
 }
 
 void JobScheduler::sort()
