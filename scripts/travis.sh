@@ -44,6 +44,7 @@ fi # end ! $LUA_DISABLE
 function build()
 {
     mkdir build && pushd build > /dev/null
+    emacs --version
     cmake "${CMAKE_PARAMS[@]}" .. || cat CMakeFiles/CMakeError.log
     make VERBOSE=1 -j2
 }
@@ -59,6 +60,7 @@ function osx()
 {
     ## Step -- Setup
     brew update
+    rm /usr/local/include/c++
     brew install llvm yarn cppunit
     brew upgrade python3
     python3 -m pip install --upgrade pip
@@ -70,7 +72,7 @@ function osx()
     build
 
     ## Step -- Test
-    run_tests
+    run_tests -E unittests
 }
 
 function gnu_linux()

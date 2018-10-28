@@ -35,13 +35,13 @@
   :group 'tools
   :link '(url-link :tag "Website" "http://rtags.net"))
 
-(if (version< emacs-version "24.3")
+(if (version< emacs-version "25")
     (eval-when-compile
       (require 'cl))
   (require 'cl-lib)
+  (require 'cl-seq)
+  (require 'cl-extra)
   (defalias 'defun* 'cl-defun))
-(require 'cl-seq)
-(provide 'cl-extra)
 (require 'bookmark)
 (require 'cc-mode)
 (require 'tramp)
@@ -73,7 +73,7 @@
 ;; Constants
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defconst rtags-protocol-version 127)
-(defconst rtags-package-version "2.19")
+(defconst rtags-package-version "2.20")
 (defconst rtags-popup-available (require 'popup nil t))
 (defconst rtags-supported-major-modes '(c-mode c++-mode objc-mode) "Major modes RTags supports.")
 (defconst rtags-verbose-results-delimiter "------------------------------------------")
