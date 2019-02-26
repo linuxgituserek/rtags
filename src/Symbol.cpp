@@ -233,15 +233,6 @@ String Symbol::displayName() const
         if (end != -1)
             return symbolName.left(end);
         break; }
-    case CXCursor_FieldDecl: {
-        int colon = symbolName.indexOf(':');
-        if (colon != -1) {
-            const int end = colon + 2;
-            while (colon > 0 && RTags::isSymbol(symbolName.at(colon - 1)))
-                --colon;
-            return symbolName.left(colon + 1) + symbolName.mid(end);
-        }
-        break; }
     default:
         break;
     }
@@ -278,8 +269,10 @@ Value Symbol::toValue(const std::shared_ptr<Project> &project,
                 (*val)[ctxKey] = loc.context(locationToStringFlags);
             }
         };
-        if (!symbol.isNull()) {
+        if (!symbol.location.isNull()) {
             formatLocation(symbol.location, "location", "context");
+        }
+        if (!symbol.isNull()) {
             if (symbol.argumentUsage.index != String::npos) {
                 formatLocation(symbol.argumentUsage.invocation, "invocation", "invocationContext", 0, "invocationcontext");
                 if (filterPiece("invokedfunction"))

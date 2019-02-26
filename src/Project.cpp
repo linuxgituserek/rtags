@@ -39,7 +39,13 @@
 #include "Server.h"
 #include "RTagsVersion.h"
 
-enum { DirtyTimeout = 100, CheckExplicitTimeout = 500, CheckPeriodicTimeout = 60 * 60000 };
+enum
+{
+    DirtyTimeout         = 100,
+    CheckExplicitTimeout = 500,
+    CheckRetryTimeout    = 5  * 60 * 1000,
+    CheckPeriodicTimeout = 60 * 60 * 1000
+};
 
 class Dirty
 {
@@ -400,6 +406,13 @@ bool Project::init()
 
 void Project::check(CheckMode checkMode)
 {
+    if ((checkMode == Check_Explicit) && isIndexing()) {
+        // it's not safe to validate the project while it's still loading
+        // try again in 5 minutes
+        mCheckTimer.restart(CheckRetryTimeout);
+        return;
+    }
+
     const Server::Options &options = Server::instance()->options();
     bool needsSave = false;
     std::unique_ptr<ComplexDirty> dirty;
@@ -488,7 +501,7 @@ void Project::check(CheckMode checkMode)
         simple.init(shared_from_this(), missingFileMaps);
         startDirtyJobs(&simple, IndexerJob::Dirty);
     }
-    mCheckTimer.restart(CheckPeriodicTimeout); // always checking every 5 minutes
+    mCheckTimer.restart(CheckPeriodicTimeout); // always checking every 1 hour
 }
 
 bool Project::match(const Match &p, bool *indexed) const
@@ -802,7 +815,7 @@ void Project::onJobFinished(const std::shared_ptr<IndexerJob> &job, const std::s
 
     Set<uint32_t> visited = msg->visitedFiles();
     updateFixIts(visited, msg->fixIts());
-    updateDependencies(fileId, msg);
+    updateDependencies(fileId, msg, job->unsavedFiles);
     if (success) {
         forEachSources([&msg, fileId](Sources &sources) -> VisitResult {
                 // error() << "finished with" << Location::path(fileId) << sources.contains(fileId) << msg->parseTime();
@@ -1091,7 +1104,7 @@ void Project::removeDependencies(uint32_t fileId)
     }
 }
 
-void Project::updateDependencies(uint32_t fileId, const std::shared_ptr<IndexDataMessage> &msg)
+void Project::updateDependencies(uint32_t fileId, const std::shared_ptr<IndexDataMessage> &msg, const UnsavedFiles &unsavedFiles)
 {
     static_cast<void>(fileId);
     const bool prune = !(msg->flags() & (IndexDataMessage::InclusionError|IndexDataMessage::ParseFailure));
@@ -1163,7 +1176,7 @@ void Project::updateDependencies(uint32_t fileId, const std::shared_ptr<IndexDat
         // }
         SimpleDirty simple;
         simple.init(shared_from_this(), dirty);
-        startDirtyJobs(&simple, IndexerJob::Dirty);
+        startDirtyJobs(&simple, IndexerJob::Dirty, unsavedFiles);
     }
     // for (auto node : mDependencies) {
     //     for (auto inc : node.second->includes) {
@@ -1207,13 +1220,39 @@ int Project::reindex(const Match &match,
 int Project::remove(const Match &match)
 {
     int count = 0;
-    forEachSourceList([&match, &count](SourceList &src) -> VisitResult {
+    bool needsSave = false;
+    Hash<uint32_t, uint32_t> removed;
+
+    auto it = mIndexParseData.compileCommands.begin();
+    while (it != mIndexParseData.compileCommands.end()) {
+        if (match.match(Location::path(it->first))) {
+            count += it->second.sources.size();
+            for (auto src : it->second.sources) {
+                removed[src.first] = 0;
+            }
+            mIndexParseData.compileCommands.erase(it++);
+            needsSave = true;
+        } else {
+            ++it;
+        }
+    }
+
+    forEachSourceList([&match, &count, &needsSave, &removed](SourceList &src) -> VisitResult {
             if (match.match(Location::path(src.fileId()))) {
                 ++count;
+                removed[src.fileId()] = 0;
+                needsSave = true;
                 return Remove;
             }
             return Continue;
         });
+
+    removeSources(removed);
+
+    if (needsSave) {
+        save();
+    }
+
     return count;
 }
 
@@ -1418,8 +1457,13 @@ void Project::findSymbols(const String &unencoded,
     const bool caseInsensitive = queryFlags & QueryMessage::MatchCaseInsensitive;
     std::regex rx;
     const bool regex = queryFlags & QueryMessage::MatchRegex;
-    if (regex)
-        rx.assign(string.ref());
+    if (regex) {
+        if (caseInsensitive) {
+            rx.assign(string.ref(), std::regex::icase);
+        } else {
+            rx.assign(string.ref());
+        }
+    }
     const String::CaseSensitivity cs = caseInsensitive ? String::CaseInsensitive : String::CaseSensitive;
     String lowerBound;
     if (wildcard) {

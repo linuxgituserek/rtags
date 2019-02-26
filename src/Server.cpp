@@ -645,7 +645,7 @@ void Server::handleIndexMessage(const std::shared_ptr<IndexMessage> &message, co
     if (conn)
         conn->finish(ret ? 0 : 1);
     if (ret) {
-        auto proj = addProject(data.project);
+        auto proj = addProject(data.project.ensureTrailingSlash());
         if (proj) {
             assert(proj);
             proj->processParseData(std::move(data));
@@ -880,13 +880,22 @@ void Server::lastIndexed(const std::shared_ptr<QueryMessage> &query, const std::
     conn->finish();
 }
 
-void Server::isIndexing(const std::shared_ptr<QueryMessage> &, const std::shared_ptr<Connection> &conn)
+void Server::isIndexing(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Connection> &conn)
 {
-    for (const auto &it : mProjects) {
-        if (it.second->isIndexing()) {
+    std::shared_ptr<Project> project = projectForQuery(query);
+    if (project) {
+        if (project->isIndexing()) {
             conn->write("1");
             conn->finish();
             return;
+        }
+    } else {
+        for (const auto &it : mProjects) {
+            if (it.second->isIndexing()) {
+                conn->write("1");
+                conn->finish();
+                return;
+            }
         }
     }
     conn->write("0");
@@ -2328,7 +2337,7 @@ void Server::codeCompleteAt(const std::shared_ptr<QueryMessage> &query, const st
         flags |= CompletionThread::IncludeMacros;
     if (query->flags() & QueryMessage::CodeCompleteNoWait)
         flags |= CompletionThread::NoWait;
-    mCompletionThread->completeAt(std::move(source), loc, flags, query->max(), query->unsavedFiles().value(loc.path()), query->codeCompletePrefix(), c);
+    mCompletionThread->completeAt(std::move(source), loc, flags, query->max(), query->unsavedFiles(), query->codeCompletePrefix(), c);
 }
 
 void Server::dumpJobs(const std::shared_ptr<Connection> &conn)
@@ -2572,7 +2581,7 @@ void Server::prepareCompletion(const std::shared_ptr<QueryMessage> &query, uint3
             }
 
             if (!source.isNull())
-                mCompletionThread->prepare(std::move(source), query->unsavedFiles().value(Location::path(fileId)));
+                mCompletionThread->prepare(std::move(source), query->unsavedFiles());
         }
     }
 }
