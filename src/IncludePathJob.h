@@ -13,40 +13,21 @@
    You should have received a copy of the GNU General Public License
    along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
 
-#include "RPThread.h"
+#ifndef IncludePathJob_h
+#define IncludePathJob_h
 
-RPThread::RPThread()
-{
-}
+#include "QueryJob.h"
 
-void RPThread::kill()
+class Project;
+class QueryMessage;
+class IncludePathJob : public QueryJob
 {
-}
+    public:
+        IncludePathJob(const Location loc, const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Project> &project);
+    protected:
+        virtual int execute() override;
+    private:
+        const Location location;
+};
 
-void RPThread::run()
-{
-}
-
-String RPThread::readAllStdOut()
-{
-}
-
-String RPThread::readAllStdErr()
-{
-}
-
-bool RPThread::start(const Path &, const List<String> &args)
-{
-}
-
-String RPThread::errorString() const
-{
-}
-
-pid_t RPThread::pid() const
-{
-}
-
-int RPThread::returnCode() const
-{
-}
+#endif
