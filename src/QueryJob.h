@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,13 +11,21 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef QueryJob_h
 #define QueryJob_h
 
+#include <stdarg.h>
+#include <stdint.h>
 #include <regex>
 #include <mutex>
+#include <functional>
+#include <map>
+#include <memory>
+#include <sstream>
+#include <utility>
+#include <vector>
 
 #include "Project.h"
 #include "QueryMessage.h"
@@ -25,11 +33,16 @@
 #include "rct/List.h"
 #include "rct/SignalSlot.h"
 #include "rct/String.h"
+#include "Location.h"
+#include "rct/Hash.h"
+#include "rct/Path.h"
+#include "rct/Set.h"
 
 class Location;
 class QueryMessage;
 class Connection;
 struct Symbol;
+
 class QueryJob : public Project::FileMapScopeScope
 {
 public:
@@ -64,6 +77,8 @@ public:
         Unfiltered = 0x04,
         NoContext = 0x08
     };
+    String symbolToString(const Symbol &symbol) const;
+
     bool write(const String &out, Flags<WriteFlag> flags = Flags<WriteFlag>());
     bool write(const Symbol &symbol, Flags<WriteFlag> writeFlags = Flags<WriteFlag>());
     bool write(Location location, Flags<WriteFlag> writeFlags = Flags<WriteFlag>());

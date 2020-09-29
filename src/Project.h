@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,13 +11,18 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef Project_h
 #define Project_h
 
+#include <assert.h>
 #include <cstdint>
 #include <mutex>
+#include <ctime>
+#include <functional>
+#include <memory>
+#include <unordered_map>
 
 #include "Diagnostic.h"
 #include "FileMap.h"
@@ -34,6 +39,16 @@
 #include "rct/Serializer.h"
 #include "RTags.h"
 #include "Token.h"
+#include "Location.h"
+#include "Source.h"
+#include "Symbol.h"
+#include "rct/Hash.h"
+#include "rct/List.h"
+#include "rct/Log.h"
+#include "rct/Map.h"
+#include "rct/Rct.h"
+#include "rct/Set.h"
+#include "rct/String.h"
 
 class Connection;
 class Dirty;
@@ -41,6 +56,9 @@ class FileManager;
 class IndexDataMessage;
 class Match;
 class RestoreThread;
+struct Token;
+template <typename Key, typename Value> class FileMap;
+
 struct DependencyNode
 {
     DependencyNode(uint32_t f)
@@ -123,7 +141,7 @@ public:
         All
     };
 
-    Set<Symbol> findDeadFunctions(uint32_t fileId);
+    Map<Symbol, size_t> findDeadFunctions(uint32_t fileId);
     Set<uint32_t> dependencies(uint32_t fileId, DependencyMode mode) const;
     bool dependsOn(uint32_t source, uint32_t header) const;
     String dumpDependencies(uint32_t fileId,

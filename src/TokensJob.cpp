@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,21 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "TokensJob.h"
+
+#include <functional>
 
 #include "Project.h"
 #include "QueryMessage.h"
 #include "rct/Log.h"
 #include "RTags.h"
-#include "Server.h"
+#include "FileMap.h"
+#include "Symbol.h"
+#include "Token.h"
+#include "rct/Flags.h"
+#include "rct/String.h"
 
 TokensJob::TokensJob(const std::shared_ptr<QueryMessage> &query,
                      uint32_t fileId,

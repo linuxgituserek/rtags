@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef RTags_h
 #define RTags_h
@@ -30,12 +30,20 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <clang-c/Index.h>
+#include <stdint.h>
+#include <string.h>
 #include <typeinfo>
 #include <utility>
-#include <unistd.h>
 #include <initializer_list>
-
-#include <clang-c/Index.h>
+#include <algorithm>
+#include <functional>
+#include <iosfwd>
+#include <memory>
+#include <string>
+#include <system_error>
+#include <vector>
 
 #include "rct/rct-config.h"
 #include "FixIt.h"
@@ -50,12 +58,17 @@
 #include "rct/String.h"
 #include "IndexMessage.h"
 #include "Sandbox.h"
+#include "clang-c/CXString.h"
+#include "rct/Hash.h"
+#include "rct/List.h"
+#include "rct/Map.h"
 
 class Database;
 class Project;
 struct Diagnostic;
 struct DependencyNode;
 class IndexDataMessage;
+
 typedef List<std::pair<uint32_t, uint32_t> > Includes;
 typedef Hash<uint32_t, DependencyNode*> Dependencies;
 typedef Hash<uint32_t, SourceList> Sources;
@@ -64,6 +77,7 @@ typedef Hash<uint32_t, Set<FixIt> > FixIts;
 typedef Hash<Path, String> UnsavedFiles;
 
 struct SourceCache;
+
 inline bool operator==(const CXCursor &l, CXCursorKind r)
 {
     return clang_getCursorKind(l) == r;
@@ -137,13 +151,14 @@ void initMessages();
 
 String eatString(CXString str);
 enum CursorToStringFlags {
-    NoCursorToStringFlags = 0x0,
-    IncludeUSR = 0x1,
-    IncludeRange = 0x2,
+    NoCursorToStringFlags = 0x00,
+    IncludeUSR = 0x01,
+    IncludeRange = 0x02,
     DefaultCursorToStringFlags = IncludeRange,
-    IncludeSpecializedUsr = 0x4,
-    IncludeStructSizeof = 0x8,
-    AllCursorToStringFlags = IncludeUSR|IncludeRange|IncludeSpecializedUsr|IncludeStructSizeof
+    IncludeSpecializedUsr = 0x04,
+    IncludeStructSizeof = 0x08,
+    RealPathCursorPath = 0x10,
+    AllCursorToStringFlags = IncludeUSR|IncludeRange|IncludeSpecializedUsr|IncludeStructSizeof|RealPathCursorPath
 };
 RCT_FLAGS(CursorToStringFlags);
 String cursorToString(CXCursor cursor, Flags<CursorToStringFlags> = DefaultCursorToStringFlags);
@@ -334,6 +349,8 @@ bool resolveAuto(const CXCursor &cursor, Auto *a = nullptr);
 
 int cursorArguments(const CXCursor &cursor, List<CXCursor> *args = nullptr);
 
+String usr(const CXCursor &cursor);
+
 struct Filter
 {
     enum Mode {
@@ -393,8 +410,8 @@ struct Filter
 };
 
 CXCursor findFirstChild(CXCursor parent);
-CXCursor findChild(CXCursor parent, CXCursorKind kind);
-CXCursor findChild(CXCursor parent, const String &name);
+CXCursor findChild(CXCursor parent, CXCursorKind kind, CXChildVisitResult mode = CXChildVisit_Recurse);
+CXCursor findChild(CXCursor parent, const String &name, CXChildVisitResult mode = CXChildVisit_Recurse);
 List<CXCursor> findChain(CXCursor parent, const List<CXCursorKind> &kinds);
 List<CXCursor> children(CXCursor parent, const Filter &in = Filter(), const Filter &out = Filter());
 
@@ -561,6 +578,37 @@ inline bool needsQualifiers(CXCursorKind kind)
     case CXCursor_EnumConstantDecl:
     case CXCursor_EnumDecl:
     case CXCursor_TypedefDecl:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+inline bool isNumber(CXTypeKind kind)
+{
+    switch (kind) {
+    case CXType_Bool:
+    case CXType_Char_U:
+    case CXType_UChar:
+    case CXType_Char16:
+    case CXType_Char32:
+    case CXType_UShort:
+    case CXType_UInt:
+    case CXType_ULong:
+    case CXType_ULongLong:
+    case CXType_UInt128:
+    case CXType_Char_S:
+    case CXType_SChar:
+    case CXType_WChar:
+    case CXType_Short:
+    case CXType_Int:
+    case CXType_Long:
+    case CXType_LongLong:
+    case CXType_Int128:
+    case CXType_Float:
+    case CXType_Double:
+    case CXType_LongDouble:
         return true;
     default:
         break;
@@ -1093,7 +1141,7 @@ inline Log operator<<(Log dbg, CXCursorKind kind)
 
 inline Log operator<<(Log dbg, CXTypeKind kind)
 {
-    dbg << RTags::eatString(clang_getTypeKindSpelling(kind));
+    dbg << static_cast<int>(kind) << RTags::eatString(clang_getTypeKindSpelling(kind));
     return dbg;
 }
 

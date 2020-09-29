@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,12 +11,17 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "QueryMessage.h"
 
+#include <assert.h>
+#include <unordered_map>
+
 #include "rct/Serializer.h"
-#include "RTags.h"
+#include "Symbol.h"
+#include "clang-c/Index.h"
+#include "rct/Rct.h"
 
 QueryMessage::QueryMessage(Type type)
     : RTagsMessage(MessageId), mType(type), mMax(-1), mMaxDepth(-1), mMinLine(-1), mMaxLine(-1), mBuildIndex(0), mTerminalWidth(-1)

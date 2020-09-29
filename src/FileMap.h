@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef FileMap_h
 #define FileMap_h
@@ -239,7 +239,7 @@ public:
         if (uint32_t size = FixedSize<Key>::value) {
             valuesOffset = ((static_cast<uint32_t>(map.size()) * size) + (sizeof(uint32_t) * 2));
             serializer << valuesOffset;
-            for (const std::pair<Key, Value> &pair : map) {
+            for (const auto &pair : map) {
                 out.append(reinterpret_cast<const char*>(&pair.first), size);
             }
         } else {
@@ -247,7 +247,7 @@ public:
             uint32_t offset = sizeof(uint32_t) * 2 + (map.size() * sizeof(uint32_t));
             String keyData;
             Serializer keySerializer(keyData);
-            for (const std::pair<Key, Value> &pair : map) {
+            for (const auto &pair : map) {
                 const uint32_t pos = offset + keyData.size();
                 out.append(reinterpret_cast<const char*>(&pos), sizeof(pos));
                 keySerializer << pair.first;
@@ -259,14 +259,14 @@ public:
         assert(valuesOffset == static_cast<uint32_t>(out.size()));
 
         if (uint32_t size = FixedSize<Value>::value) {
-            for (const std::pair<Key, Value> &pair : map) {
+            for (const auto &pair : map) {
                 out.append(reinterpret_cast<const char*>(&pair.second), size);
             }
         } else {
             const uint32_t encodedValuesOffset = valuesOffset + (sizeof(uint32_t) * map.size());
             String valueData;
             Serializer valueSerializer(valueData);
-            for (const std::pair<Key, Value> &pair : map) {
+            for (const auto &pair : map) {
                 const uint32_t pos = encodedValuesOffset + valueData.size();
                 out.append(reinterpret_cast<const char*>(&pos), sizeof(pos));
                 valueSerializer << pair.second;

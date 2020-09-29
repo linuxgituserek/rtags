@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,16 +11,22 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef ReferencesJob_h
 #define ReferencesJob_h
 
+#include <memory>
+
 #include "Location.h"
 #include "QueryJob.h"
 #include "rct/String.h"
+#include "rct/Set.h"
 
 class SymbolInfo;
+class Project;
+class QueryMessage;
+
 class ReferencesJob : public QueryJob
 {
 public:

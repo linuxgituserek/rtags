@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,18 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef Token_h
 #define Token_h
 
+#include <clang-c/Index.h>
+#include <stdint.h>
+
 #include "rct/Serializer.h"
 #include "rct/Log.h"
 #include "Location.h"
-#include <clang-c/Index.h>
+#include "rct/String.h"
 
 struct Token
 {

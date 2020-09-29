@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,19 +11,26 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "Preprocessor.h"
-#include "Server.h"
 
+#include <assert.h>
+#include <sys/types.h>
+#include <functional>
+
+#include "Server.h"
 #include "rct/Connection.h"
-#include "rct/Log.h"
 #include "rct/Process.h"
-#include "RTags.h"
+#include "rct/EventLoop.h"
+#include "rct/Flags.h"
+#include "rct/Path.h"
+#include "rct/SignalSlot.h"
 
 const Flags<Source::CommandLineFlag> SourceFlags = (Source::IncludeSourceFile
                                                     | Source::IncludeExtraCompiler
                                                     | Source::ExcludeDefaultArguments
+                                                    | Source::FilterBlacklist
                                                     | Source::ExcludeDefaultIncludePaths
                                                     | Source::ExcludeDefaultDefines
                                                     | Source::IncludeIncludePaths
@@ -60,7 +67,6 @@ void Preprocessor::preprocess()
 
 void Preprocessor::onProcessFinished()
 {
-    mConnection->client()->setWriteMode(SocketClient::Synchronous);
     mConnection->write<256>("/* %s %s */", mSource.compiler().constData(), String::join(mArgs, ' ').constData());
     mConnection->write(mProcess->readAllStdOut());
     const String err = mProcess->readAllStdErr();
@@ -70,4 +76,3 @@ void Preprocessor::onProcessFinished()
     mConnection->finish();
     EventLoop::deleteLater(this);
 }
-

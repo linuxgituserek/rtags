@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,27 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "FindFileJob.h"
 
+#include <assert.h>
+#include <limits.h>
+#include <map>
+#include <set>
+#include <sstream>
+#include <utility>
+#include <vector>
+
 #include "FileManager.h"
 #include "Project.h"
-#include "rct/SignalSlot.h"
 #include "RTags.h"
-#include "Server.h"
+#include "QueryMessage.h"
+#include "rct/Flags.h"
+#include "rct/List.h"
+#include "rct/Path.h"
+#include "rct/Rct.h"
+#include "rct/Set.h"
 
 static Flags<QueryJob::JobFlag> flags(Flags<QueryMessage::Flag> queryFlags)
 {

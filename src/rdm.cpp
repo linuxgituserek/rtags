@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,27 +11,41 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
+#include <errno.h>
+#include <limits.h>
+#include <string.h>
+#include <strings.h>
+#include <unistd.h>
+#include <algorithm>
+#include <functional>
+#include <initializer_list>
+#include <memory>
+#include <utility>
 #ifdef OS_Darwin
 #include <sys/resource.h>
 #endif
 
 #include "rct/EventLoop.h"
-#include "rct/FileSystemWatcher.h"
 #include "rct/Log.h"
 #include "rct/Process.h"
 #include "rct/rct-config.h"
 #include "rct/Rct.h"
-#include "rct/StackBuffer.h"
-#include "rct/Thread.h"
 #include "rct/ThreadPool.h"
 #include "RTags.h"
 #include "CommandLineParser.h"
 #include "Server.h"
+#include "Source.h"
+#include "rct/Flags.h"
+#include "rct/List.h"
+#include "rct/Path.h"
+#include "rct/Set.h"
+#include "rct/String.h"
 #ifdef HAVE_BACKTRACE
 #include <execinfo.h>
 #endif
@@ -301,16 +315,15 @@ int main(int argc, char** argv)
         { NoWall, "no-Wall", 'W', CommandLineParser::NoValue, "Don't use -Wall." },
         { Weverything, "Weverything", 'u', CommandLineParser::NoValue, "Use -Weverything." },
         { Verbose, "verbose", 'v', CommandLineParser::NoValue, "Change verbosity, multiple -v's are allowed." },
-        { JobCount, "job-count", 'j', CommandLineParser::Required, String::format("Spawn this many concurrent processes for indexing (default %d).",
-                                                                                  std::max(2, ThreadPool::idealThreadCount())) },
+        { JobCount, "job-count", 'j', CommandLineParser::Required, String::format("Spawn this many concurrent processes for indexing (default to the number of available processing units or 2 otherwise).") },
         { Test, "test", 't', CommandLineParser::Required, "Run this test." },
-        { TempDir, "tempdir", 0, CommandLineParser::Required, "Use this directory for temporary files. Clang generates a lot of these and rtags will periodically clean out this directory. Default is $TMPDIR/rtags/" },
+        { TempDir, "tempdir", 0, CommandLineParser::Required, "Use this directory for temporary files. Clang generates a lot of these and rtags will periodically clean out this directory (default is $TMPDIR/rtags/)" },
         { TestTimeout, "test-timeout", 'z', CommandLineParser::Required, "Timeout for test to complete." },
         { CleanSlate, "clean-slate", 'C', CommandLineParser::NoValue, "Clear out all data." },
         { DisableSigHandler, "disable-sighandler", 'x', CommandLineParser::NoValue, "Disable signal handler to dump stack for crashes." },
         { Silent, "silent", 'S', CommandLineParser::NoValue, "No logging to stdout/stderr." },
-        { ExcludeFilter, "exclude-filter", 'X', CommandLineParser::Required, String::format("Files to exclude from rdm, default \"%s\".", DEFAULT_EXCLUDEFILTER) },
-        { SocketFile, "socket-file", 'n', CommandLineParser::Required, "Use this file for the server socket (default ~/.rdm)." },
+        { ExcludeFilter, "exclude-filter", 'X', CommandLineParser::Required, String::format("Files to exclude from rdm (default \"%s\".)", DEFAULT_EXCLUDEFILTER) },
+        { SocketFile, "socket-file", 'n', CommandLineParser::Required, "Use this file for the server socket (default is XDG_RUNTIME_DIR/rdm.socket else ~/.rdm)." },
         { DataDir, "data-dir", 'd', CommandLineParser::Required, "Use this directory to store persistent data (default $XDG_CACHE_HOME/rtags otherwise ~/.cache/rtags)." },
         { IgnorePrintfFixits, "ignore-printf-fixits", 'F', CommandLineParser::NoValue, "Disregard any clang fixit that looks like it's trying to fix format for printf and friends." },
         { ErrorLimit, "error-limit", 'f', CommandLineParser::Required, String::format("Set error limit to argument (-ferror-limit={arg} (default %d).", DEFAULT_ERROR_LIMIT) },

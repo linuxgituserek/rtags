@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,12 +11,29 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "ClangThread.h"
+
+#include <assert.h>
+#include <functional>
+#include <utility>
+
 #include "rct/Connection.h"
 #include "RTags.h"
-#include "Server.h"
+#include "Location.h"
+#include "Project.h"
+#include "QueryMessage.h"
+#include "clang-c/CXString.h"
+#include "clang-c/Index.h"
+#include "rct/EventLoop.h"
+#include "rct/Flags.h"
+#include "rct/List.h"
+#include "rct/Log.h"
+#include "rct/Map.h"
+#include "rct/Path.h"
+#include "rct/SignalSlot.h"
+#include "rct/StopWatch.h"
 
 struct Dep : public DependencyNode
 {
@@ -104,6 +121,11 @@ CXChildVisitResult ClangThread::visit(const CXCursor &cursor)
                 }
             };
 
+            const int argCount = clang_Cursor_getNumArguments(cursor);
+            if (argCount != -1) {
+                message.append(String::format("arg count: %d ", argCount));
+            }
+
             CXCursor ref = clang_getCursorReferenced(cursor);
             bool refSpecialized = false;
             if (RTags::isValid(ref) && ref != cursor) {
@@ -122,11 +144,14 @@ CXChildVisitResult ClangThread::visit(const CXCursor &cursor)
             }
         }
     }
-    ++mIndentLevel;
-    clang_visitChildren(cursor, ClangThread::visitor, this);
-    if (isAborted())
-        return CXChildVisit_Break;
-    --mIndentLevel;
+    const String usr = RTags::usr(cursor);
+    if (usr.isEmpty() || mSeen.insert(usr)) {
+        ++mIndentLevel;
+        clang_visitChildren(cursor, ClangThread::visitor, this);
+        if (isAborted())
+            return CXChildVisit_Break;
+        --mIndentLevel;
+    }
     return CXChildVisit_Continue;
 }
 

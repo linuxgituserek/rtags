@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,33 +11,49 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "Project.h"
 
-#include <fnmatch.h>
+#include <Source.h>
+#include <limits.h>
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 #include <memory>
 #include <regex>
 #include <utility>
+#include <algorithm>
+#include <initializer_list>
+#include <limits>
+#include <map>
+#include <sstream>
+#include <vector>
 
 #include "Diagnostic.h"
 #include "FileManager.h"
 #include "CompilerManager.h"
 #include "IndexDataMessage.h"
 #include "JobScheduler.h"
-#include "LogOutputMessage.h"
 #include "rct/DataFile.h"
 #include "rct/Log.h"
 #include "rct/MemoryMonitor.h"
 #include "rct/Path.h"
 #include "rct/Rct.h"
-#include "rct/ReadLocker.h"
-#include "rct/Thread.h"
 #include "rct/Value.h"
 #include "RTags.h"
 #include "RTagsLogOutput.h"
 #include "Server.h"
 #include "RTagsVersion.h"
+#include "FileMap.h"
+#include "FixIt.h"
+#include "Match.h"
+#include "Sandbox.h"
+#include "Token.h"
+#include "clang-c/Index.h"
+#include "rct/Connection.h"
+#include "rct/SignalSlot.h"
 
 enum
 {
@@ -1019,7 +1035,6 @@ void Project::onFileRemoved(const Path &file)
         mCheckTimer.restart(CheckExplicitTimeout);
         return;
     }
-    removeSource(fileId);
 
     if (Server::instance()->suspended() || mSuspendedFiles.contains(fileId)) {
         warning() << file << "is suspended. Ignoring modification";
@@ -2921,9 +2936,9 @@ void Project::validateAll()
         startDirtyJobs(&dirty, IndexerJob::Dirty);
 }
 
-Set<Symbol> Project::findDeadFunctions(uint32_t fileId)
+Map<Symbol, size_t> Project::findDeadFunctions(uint32_t fileId)
 {
-    Set<Symbol> ret;
+    Map<Symbol, size_t> ret;
     auto processFile = [this, &ret](uint32_t file, Set<String> *seen = nullptr) {
         auto symbols = openSymbols(file);
         if (!symbols)
@@ -2936,9 +2951,12 @@ Set<Symbol> Project::findDeadFunctions(uint32_t fileId)
                 && s.kind != CXCursor_Destructor
                 && s.kind != CXCursor_LambdaExpr
                 && !s.symbolName.startsWith("int main(")
-                && (!seen || seen->insert(s.usr))
-                && findCallers(s, 1).isEmpty()) {
-                ret.insert(std::move(s));
+                && !s.symbolName.startsWith("void main(")
+                && (!seen || seen->insert(s.usr))) {
+                const size_t callers = findCallers(s, 2).size();
+                if (callers < 2) {
+                    ret[std::move(s)] = callers;
+                }
             }
         }
     };

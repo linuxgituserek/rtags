@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,19 +11,24 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "Server.h"
-#include <rct/ThreadPool.h>
-#include "TokensJob.h"
 
-#include <arpa/inet.h>
 #include <clang-c/Index.h>
 #include <clang-c/CXCompilationDatabase.h>
 #include <stdio.h>
-#include <limits>
-#include <regex>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <cstdint>
+#include <iterator>
+#include <map>
+#include <unordered_map>
+#include <vector>
 
+#include "TokensJob.h"
 #include "ClassHierarchyJob.h"
 #include "CompletionThread.h"
 #include "IncludePathJob.h"
@@ -36,7 +41,6 @@
 #include "FollowLocationJob.h"
 #include "IncludeFileJob.h"
 #include "IndexDataMessage.h"
-#include "IndexerJob.h"
 #include "IndexMessage.h"
 #include "JobScheduler.h"
 #include "ListSymbolsJob.h"
@@ -67,6 +71,18 @@
 #include "VisitFileMessage.h"
 #include "VisitFileResponseMessage.h"
 #include "RTagsVersion.h"
+#include "FileMap.h"
+#include "Location.h"
+#include "QueryJob.h"
+#include "Sandbox.h"
+#include "Symbol.h"
+#include "clang-c/CXString.h"
+#include "rct/FinishMessage.h"
+#include "rct/Map.h"
+#include "rct/ResponseMessage.h"
+#include "rct/Serializer.h"
+#include "rct/SocketServer.h"
+#include "rct/Thread.h"
 
 #define TO_STR1(x) #x
 #define TO_STR(x) TO_STR1(x)
@@ -217,7 +233,7 @@ bool Server::init(const Options &options)
             current.chop(1);
             const auto project = mProjects.value(current);
             if (!project) {
-                error() << "Can't restore project" << current;
+                error() << "Can't restore current project" << current;
                 unlink((mOptions.dataDir + ".currentProject").constData());
             } else {
                 setCurrentProject(project);
@@ -1338,8 +1354,6 @@ void Server::listSymbols(const std::shared_ptr<QueryMessage> &query, const std::
 
 void Server::status(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Connection> &conn)
 {
-    conn->client()->setWriteMode(SocketClient::Synchronous);
-
     StatusJob job(query, currentProject());
     const int ret = job.run(conn);
     conn->finish(ret);
@@ -1736,9 +1750,16 @@ void Server::deadFunctions(const std::shared_ptr<QueryMessage> &query, const std
                 bool failed = false;
                 const std::shared_ptr<Project> proj = project();
                 auto process = [this, proj, &failed](uint32_t file) {
-                    for (const Symbol &symbol : proj->findDeadFunctions(file)) {
-                        if (!failed && !write(symbol))
-                            failed = true;
+                    for (const auto &pair : proj->findDeadFunctions(file)) {
+                        String out = symbolToString(pair.first);
+                        if (!out.isEmpty()) {
+                            out.chop(1);
+                            out += String::format<32>(" - %zu callers\n", pair.second);
+                            if (!write(out, Unfiltered)) {
+                                failed = true;
+                                break;
+                            }
+                        }
                     }
                 };
                 if (!fileId) {
@@ -1746,7 +1767,7 @@ void Server::deadFunctions(const std::shared_ptr<QueryMessage> &query, const std
                     all.remove([](uint32_t file) { return Location::path(file).isSystem(); });
                     size_t idx = 0;
                     const Path projectPath = proj->path();
-                    for (uint32_t file : proj->dependencies(0, Project::All)) {
+                    for (uint32_t file : all) {
                         if (raw) {
                             Path p = Location::path(file);
                             const char *ch = p.constData();
@@ -2230,7 +2251,7 @@ bool Server::load()
                     fclose(f);
                 }
                 if (remove) {
-                    Path::rm(file);
+                    Path::rmdir(file);
                 }
             }
         }

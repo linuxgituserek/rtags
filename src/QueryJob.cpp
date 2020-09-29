@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,18 +11,22 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "QueryJob.h"
 
-#include <regex>
+#include <assert.h>
+#include <ctype.h>
+#include <string.h>
 
 #include "Project.h"
 #include "QueryMessage.h"
 #include "RTags.h"
-#include "Server.h"
 #include "rct/Connection.h"
-#include "rct/EventLoop.h"
+#include "FileMap.h"
+#include "Symbol.h"
+#include "rct/Log.h"
+#include "rct/Value.h"
 
 QueryJob::QueryJob(const std::shared_ptr<QueryMessage> &query,
                    const std::shared_ptr<Project> &proj,
@@ -117,9 +121,9 @@ bool QueryJob::writeRaw(const String &out, Flags<WriteFlag> flags)
 }
 
 bool QueryJob::locationToString(Location location,
-    const std::function<void(LocationPiece, const String &)> &cb,
-    Flags<WriteFlag>
-        writeFlags)
+                                const std::function<void(LocationPiece, const String &)> &cb,
+                                Flags<WriteFlag>
+                                writeFlags)
 {
     if (location.isNull())
         return false;
@@ -164,7 +168,7 @@ bool QueryJob::locationToString(Location location,
                                 cb(Piece_ContainingFunctionName, symbol.symbolName);
                             if (containingFunctionLocation)
                                 cb(Piece_ContainingFunctionLocation,
-                                    symbol.location.toString(locationToStringFlags() & ~Location::ShowContext));
+                                   symbol.location.toString(locationToStringFlags() & ~Location::ShowContext));
                             break;
                         }
                     }
@@ -187,28 +191,28 @@ bool QueryJob::write(Location location, Flags<WriteFlag> flags)
 
     String out;
     if (!locationToString(location,
-            [&out](LocationPiece piece, const String &string) {
-                switch (piece) {
-                case Piece_Location:
-                    break;
-                case Piece_SymbolName:
-                case Piece_Kind:
-                case Piece_Context:
-                    out << '\t';
-                    break;
-                case Piece_ContainingFunctionName:
-                case Piece_ContainingFunctionLocation:
-                    out << "\tfunction: ";
-                    break;
-                }
-                out << string;
-            },
-            flags))
+                          [&out](LocationPiece piece, const String &string) {
+                              switch (piece) {
+                              case Piece_Location:
+                                  break;
+                              case Piece_SymbolName:
+                              case Piece_Kind:
+                              case Piece_Context:
+                                  out << '\t';
+                                  break;
+                              case Piece_ContainingFunctionName:
+                              case Piece_ContainingFunctionLocation:
+                                  out << "\tfunction: ";
+                                  break;
+                              }
+                              out << string;
+                          },
+                          flags))
         return false;
     return write(out, flags);
 }
 
-bool QueryJob::write(const Symbol &symbol, Flags<WriteFlag> writeFlags)
+String QueryJob::symbolToString(const Symbol &symbol) const
 {
     Flags<Symbol::ToStringFlag> toStringFlags;
     if (queryFlags() & QueryMessage::SymbolInfoIncludeTargets)
@@ -226,14 +230,17 @@ bool QueryJob::write(const Symbol &symbol, Flags<WriteFlag> writeFlags)
     if (queryFlags() & (QueryMessage::ContainingFunctionLocation | QueryMessage::JSON | QueryMessage::Elisp))
         toStringFlags |= Symbol::IncludeContainingFunctionLocation;
 
-    if (symbol.isNull())
-        return false;
+    if (symbol.isNull()) {
+        return String();
+    }
 
-    if (!filterLocation(symbol.location))
-        return false;
+    if (!filterLocation(symbol.location)) {
+        return String();
+    }
 
-    if (!mKindFilters.filter(symbol))
-        return false;
+    if (!mKindFilters.filter(symbol)) {
+        return String();
+    }
 
     String out;
     if (queryFlags() & (QueryMessage::Elisp | QueryMessage::JSON)) {
@@ -246,7 +253,15 @@ bool QueryJob::write(const Symbol &symbol, Flags<WriteFlag> writeFlags)
     } else {
         out = symbol.toString(project(), toStringFlags, locationToStringFlags(), mPieceFilters);
     }
-    return write(out, writeFlags | Unfiltered);
+    return out;
+}
+
+bool QueryJob::write(const Symbol &symbol, Flags<WriteFlag> writeFlags)
+{
+    String out = symbolToString(symbol);
+    if (!out.isEmpty())
+        return write(out, writeFlags | Unfiltered);
+    return true;
 }
 
 bool QueryJob::filter(const String &value) const

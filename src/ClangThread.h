@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,21 +11,31 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef ClangThread_h
 #define ClangThread_h
 
 #include <clang-c/Index.h>
+#include <stdint.h>
+#include <memory>
+#include <mutex>
 
 #include "Project.h"
 #include "QueryMessage.h"
 #include "rct/Thread.h"
 #include "rct/Value.h"
 #include "Source.h"
+#include "rct/Hash.h"
+#include "rct/Set.h"
+#include "rct/String.h"
 
 class Connection;
 struct Dep;
+class Location;
+class Path;
+class QueryMessage;
+
 class ClangThread : public Thread
 {
 public:
@@ -53,6 +63,7 @@ private:
     mutable std::mutex mMutex;
     Hash<uint32_t, Dep*> mDependencies;
     Hash<Path, String> mContextCache;
+    Set<String> mSeen;
     bool mAborted;
 };
 

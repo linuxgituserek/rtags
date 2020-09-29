@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,18 +11,32 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "StatusJob.h"
 
-#include <clang-c/Index.h>
+#include <stdint.h>
+#include <strings.h>
+#include <map>
+#include <unordered_map>
+#include <utility>
 
 #include "CompilerManager.h"
-#include "JobScheduler.h"
 #include "Project.h"
-#include "rct/Process.h"
 #include "RTags.h"
 #include "Server.h"
+#include "FileMap.h"
+#include "IndexParseData.h"
+#include "Location.h"
+#include "QueryMessage.h"
+#include "Source.h"
+#include "Symbol.h"
+#include "rct/Flags.h"
+#include "rct/Hash.h"
+#include "rct/List.h"
+#include "rct/Log.h"
+#include "rct/Path.h"
+#include "rct/Set.h"
 
 const char *StatusJob::delimiter = "*********************************";
 StatusJob::StatusJob(const std::shared_ptr<QueryMessage> &q, const std::shared_ptr<Project> &project)

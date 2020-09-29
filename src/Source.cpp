@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,31 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "Source.h"
 
+#include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <unistd.h>
+#include <functional>
+#include <initializer_list>
+#include <set>
+#include <utility>
+#include <vector>
+
 #include "Location.h"
-#include "rct/EventLoop.h"
 #include "rct/Process.h"
 #include "RTags.h"
 #include "Server.h"
+#include "Sandbox.h"
+#include "rct/Hash.h"
+#include "rct/Map.h"
 
 void Source::clear()
 {
@@ -185,6 +201,7 @@ static const char *valueArgs[] = {
 };
 
 static const char *blacklist[] = {
+    "--driver-mode=",
     "--param",
     "-M",
     "-MD",
@@ -207,7 +224,7 @@ static const char *blacklist[] = {
     "-fembed-bitcode-marker",
     "-fmodules-validate-once-per-build-session",
     "-fno-delete-null-pointer-checks",
-    "-fno-use-linker-plugin"
+    "-fno-use-linker-plugin",
     "-fno-var-tracking",
     "-fno-var-tracking-assignments",
     "-fno-enforce-eh-specs",

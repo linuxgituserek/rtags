@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,18 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "DependenciesJob.h"
 
-#include "FileManager.h"
+#include <algorithm>
+
 #include "Project.h"
 #include "QueryMessage.h"
-#include "RTags.h"
-#include "Server.h"
+#include "Location.h"
+#include "rct/Flags.h"
+#include "rct/Path.h"
+#include "rct/Serializer.h"
 
 DependenciesJob::DependenciesJob(const std::shared_ptr<QueryMessage> &query, const std::shared_ptr<Project> &project)
     : QueryJob(query, project, QuietJob)

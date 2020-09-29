@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,11 +11,29 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
+
+#include <assert.h>
+#include <stdint.h>
+#include <string.h>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <string>
 
 #include "RTags.h"
 #include "Symbol.h"
 #include "Project.h"
+#include "FileMap.h"
+#include "Location.h"
+#include "clang-c/Index.h"
+#include "rct/Flags.h"
+#include "rct/List.h"
+#include "rct/Log.h"
+#include "rct/Path.h"
+#include "rct/Set.h"
+#include "rct/String.h"
+#include "rct/Value.h"
 
 uint16_t Symbol::targetsValue() const
 {

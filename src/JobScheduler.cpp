@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,9 +11,18 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "JobScheduler.h"
+
+#include <signal.h>
+#include <algorithm>
+#include <cstdint>
+#include <functional>
+#include <regex>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "IndexDataMessage.h"
 #include "IndexerJob.h"
@@ -21,6 +30,14 @@
 #include "rct/Connection.h"
 #include "rct/Process.h"
 #include "Server.h"
+#include "rct/EventLoop.h"
+#include "rct/Flags.h"
+#include "rct/List.h"
+#include "rct/Log.h"
+#include "rct/Path.h"
+#include "rct/Rct.h"
+#include "rct/SignalSlot.h"
+#include "rct/Timer.h"
 
 enum { MaxPriority = 10 };
 // we set the priority to be this when a job has been requested and we couldn't load it
@@ -458,6 +475,6 @@ void JobScheduler::connectProcess(Process *process)
 {
     assert(process);
     process->readyReadStdOut().connect(std::bind(&JobScheduler::onProcessReadyReadStdOut, this, std::placeholders::_1));
-    process->readyReadStdOut().connect(std::bind(&JobScheduler::onProcessReadyReadStdErr, this, std::placeholders::_1));
+    process->readyReadStdErr().connect(std::bind(&JobScheduler::onProcessReadyReadStdErr, this, std::placeholders::_1));
     process->finished().connect(std::bind(&JobScheduler::onProcessFinished, this, std::placeholders::_1, std::placeholders::_2));
 }

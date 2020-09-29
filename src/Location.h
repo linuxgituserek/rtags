@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,21 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef Location_h
 #define Location_h
 
-#include <algorithm>
 #include <assert.h>
 #include <clang-c/Index.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <algorithm>
+#include <functional>
+#include <type_traits>
+#include <utility>
 #if defined(OS_Linux)
 #include <linux/limits.h>
 #elif defined(OS_Darwin)
@@ -27,6 +33,7 @@
 #endif
 #ifndef RTAGS_SINGLE_THREAD
 #include <mutex>
+
 #define LOCK() const std::lock_guard<std::mutex> lock(sMutex)
 #else
 #define LOCK() do {} while (0)
@@ -38,6 +45,7 @@
 #include "rct/Serializer.h"
 #include "rct/String.h"
 #include "rct/StackBuffer.h"
+#include "rct/Hash.h"
 
 static inline int intCompare(uint32_t l, uint32_t r)
 {

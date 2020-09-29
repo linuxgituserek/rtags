@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,10 +11,14 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef RClient_h
 #define RClient_h
+
+#include <stddef.h>
+#include <stdint.h>
+#include <memory>
 
 #include "QueryMessage.h"
 #include "rct/List.h"
@@ -24,10 +28,15 @@
 #include "rct/String.h"
 #include "CommandLineParser.h"
 #include "rct/rct-config.h"
+#include "RTags.h"
+#include "rct/Flags.h"
+#include "rct/Log.h"
 
 class RCCommand;
 class QueryCommand;
 class Connection;
+class Message;
+
 class RClient
 {
 public:
@@ -104,7 +113,6 @@ public:
         ListSymbols,
         LoadCompileCommands,
         LogFile,
-        Man,
         MatchCaseInsensitive,
         MatchRegex,
         Max,

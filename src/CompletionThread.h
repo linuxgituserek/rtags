@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,15 +11,18 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #ifndef CompletionThread_h
 #define CompletionThread_h
 
 #include <clang-c/Index.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <utility>
 
 #include "Location.h"
 #include "rct/Connection.h"
@@ -30,8 +33,15 @@
 #include "rct/Thread.h"
 #include "Source.h"
 #include "RTags.h"
+#include "rct/Hash.h"
+#include "rct/List.h"
+#include "rct/Set.h"
+#include "rct/String.h"
+#include "rct/Value.h"
 
 struct MatchResult;
+class Project;
+
 class CompletionThread : public Thread
 {
 public:
@@ -60,6 +70,7 @@ public:
     String dump();
 private:
     struct Request;
+
     void processDiagnostics(const Request *request, CXCodeCompleteResults *results, CXTranslationUnit unit);
     void process(Request *request);
 

@@ -1,4 +1,4 @@
-/* This file is part of RTags (http://rtags.net).
+/* This file is part of RTags (https://github.com/Andersbakken/rtags).
 
    RTags is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -11,13 +11,27 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with RTags.  If not, see <http://www.gnu.org/licenses/>. */
+   along with RTags.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include "ReferencesJob.h"
 
+#include <stddef.h>
+#include <algorithm>
+#include <functional>
+#include <map>
+#include <utility>
+#include <vector>
+
 #include "Project.h"
 #include "RTags.h"
-#include "Server.h"
+#include "QueryMessage.h"
+#include "Symbol.h"
+#include "clang-c/Index.h"
+#include "rct/Flags.h"
+#include "rct/List.h"
+#include "rct/Map.h"
+#include "rct/Path.h"
+#include "rct/Value.h"
 
 static inline Flags<QueryJob::JobFlag> jobFlags(Flags<QueryMessage::Flag> queryFlags)
 {

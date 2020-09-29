@@ -14,7 +14,6 @@ jobs:
   include:
     - os: linux
       compiler: g++
-      dist: trusty
       env: T=g++-linux COMPILER_VERSION=-7 CMAKE_BUILD_TYPE=Debug
       script: ./scripts/travis.sh
       addons:
@@ -27,7 +26,6 @@ jobs:
             - libcppunit-dev
     - os: linux
       compiler: g++
-      dist: trusty
       env: T=g++-linux COMPILER_VERSION=-7 CMAKE_BUILD_TYPE=Release
       script: ./scripts/travis.sh
       addons:
@@ -49,6 +47,7 @@ jobs:
             - llvm
             - yarn
             - cppunit
+          update: true
     - os: osx
       osx_image: xcode11
       script: ./scripts/travis.sh
@@ -60,6 +59,7 @@ jobs:
             - llvm
             - yarn
             - cppunit
+          update: true
     - stage: Release
       before_deploy: ./scripts/rtags-release.sh
       script: true
